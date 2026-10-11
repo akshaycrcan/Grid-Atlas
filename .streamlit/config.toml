@@ -1,0 +1,32 @@
+[server]
+address = "127.0.0.1"
+headless = true
+maxUploadSize = 15
+
+[browser]
+gatherUsageStats = false
+
+# GridAxon-inspired white, charcoal, and cyan palette; system fonts.
+[theme]
+base = "light"
+primaryColor = "#157D96"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F8FA"
+textColor = "#30383C"
+borderColor = "#DCE8ED"
+linkColor = "#157D96"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "8px"
+buttonRadius = "8px"
+font = "sans-serif"
+baseFontSize = 16
+headingFontSizes = ["48px", "30px", "23px", "19px", "17px", "15px"]
+
+blueColor = "#157D96"
+greenColor = "#39865F"
+orangeColor = "#B86632"
+
+[theme.sidebar]
+backgroundColor = "#F2F8FA"
+secondaryBackgroundColor = "#E3F1F5"

@@ -1,0 +1,21 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Local research and secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+data/
+exports/
+.pytest_cache/
+.ruff_cache/
+*.log
