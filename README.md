@@ -1,6 +1,47 @@
-# Grid Atlas · Datacenter site research
+# Grid Atlas
 
-A local Streamlit workspace for investigating announced and existing US datacenter projects, covering power, cooling and water, connectivity, reliability, economics, market competition, and land/permitting/community factors. Findings use the full workspace width; the AI chat panel has been removed.
+**[Open the live app](https://grid-atlas.streamlit.app/)**
+
+Datacenter site research powered by Streamlit and OpenAI.
+
+A Streamlit application, available online and runnable locally, for investigating announced and existing US datacenter projects, covering power, cooling and water, connectivity, reliability, economics, market competition, and land/permitting/community factors. Findings use the full workspace width with direct links to supporting sources.
+
+## Use the hosted app
+
+Visit **https://grid-atlas.streamlit.app/**. Select a developer, click **Find sites**, and choose a datacenter from the map or the list below it. Hover over a marker to see site names. Findings are organized into seven sections:
+
+1. Power
+2. Cooling and water
+3. Location and connectivity
+4. Design and reliability
+5. Economics
+6. Market and competitive landscape
+7. Land, permitting and community
+
+Unsupported fields display **Details not available.** Incomplete investigations show diagnostics and recovery options. **Reanalyze saved documents** reuses retrieved evidence; **Retry investigation** performs new discovery and retrieval. Both can use paid AI calls. The hosted app uses the deployment owner's credentials; visitors do not enter an API key.
+
+## Streamlit deployment and configuration
+
+The published application is hosted on Streamlit Community Cloud. The application entry point is `app.py`; dependency definitions are in `pyproject.toml` and `uv.lock`. Local package and environment management use **uv exclusively**.
+
+Store deployment credentials in the app's **Settings → Secrets**, not in Git. Use top-level TOML values such as:
+
+```toml
+OPENAI_API_KEY = "replace-with-your-api-key"
+OPENAI_MODEL = "replace-with-your-compatible-model-id"
+```
+
+Choose an account-accessible model supporting web search and structured outputs. These are placeholders, not working credentials. Optional administrator configuration includes `GRID_ATLAS_VERIFIED_DOMAINS` (comma-separated verified publisher domains) and `PWRBNB_DATA_DIR` (a storage path on the host).
+
+To update the deployed code, commit and push changes to the GitHub branch selected in Streamlit's deployment settings. The local repository currently tracks `main`; confirm the deployed branch in Streamlit before expecting an update. Review deployment logs after application or dependency changes. Keep `uv.lock` committed; use `uv add` and `uv lock` for dependency changes.
+
+See Streamlit's [secrets management](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management) and [app management](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app) documentation.
+
+### Hosted storage and usage
+
+Research uses a host-local SQLite database and downloaded files. The current implementation shares that store across visitors; it does not provide per-user research isolation. Hosted filesystem storage should not be treated as a durable backup. Use persistent external storage and access controls before relying on the service for private, multi-user work. Live research consumes the deployment owner's API budget, and the current app has per-operation limits rather than per-visitor quotas.
+
+Never commit `.env`, `.streamlit/secrets.toml`, or the `data/` directory. If a credential is exposed, revoke it and replace it in both local configuration and deployment Secrets.
 
 ## Run locally
 
@@ -46,7 +87,7 @@ City pins use the bundled US Census 2025 Gazetteer and represent cities, not cam
 
 ## Evidence and data
 
-- SQLite stores immutable research snapshots, claims, source metadata, scoped full-text passages, chat, and operation IDs.
+- SQLite stores immutable research snapshots, claims, source metadata, diagnostics and operation IDs. Legacy chat and full-text tables are retained for compatibility with earlier databases.
 - Original downloads are stored by SHA-256 under `data/documents/`.
 - No database or downloaded document is committed to Git.
 - Set `PWRBNB_DATA_DIR` to use another local data directory.
@@ -108,15 +149,15 @@ The implementation was verified with Streamlit 1.65 and Python 3.14.8. The suppl
 
 The white, charcoal, and cyan styling references https://gridaxon.io/. The large city map sits above a selectable site list and full-width findings. Developer selection is in the expanded sidebar; research limits are configured in code. The interface removes identity confirmation, location editing, saved-investigation navigation, and research history details.
 
-This remains a local prototype, not a published service. Offering it free on the GridAxon website will require hosting, server-side API credentials, per-visitor data isolation, and usage controls; the service operator still pays API costs. No hosting or website changes are included in this update.
+Grid Atlas is published on Streamlit Community Cloud. Integration into the GridAxon website is a separate step; this repository does not claim that integration is already live.
 
 ## Source-verified findings
 
 The findings view always presents seven sections with direct source links. Only supported documented facts and attributed announcements are displayed. Missing fields use "Details not available." Retrieval failures and incomplete analysis are disclosed separately. Synthetic data belongs exclusively to the tests; demo, export, and chat features are not part of the app.
 
-### Research recovery update
+### Research and recovery behavior
 
-Search requests preserve developer, city, state and identity URL. Generic lifecycle labels such as Existing are separated from construction phases. Official Google Blog and SRP domains are registered explicitly; lookalike domains remain blocked. Sources are prioritized by verified publisher and operator family, with instructions to prefer campus-specific material. The document setting limits readable records; attempts are separately capped at three times that setting. Structured findings use a fixed metric enum and derive their section, retaining quote and semantic checks. Proposed findings and rejection reasons remain saved internally for diagnosis. Version 2 reports distinguish complete, partial, no-findings and failed runs; older snapshots remain intact and can be retried explicitly. The Mesa and Quincy pipeline regression tests use synthetic fixtures, not paid live API calls.
+Search requests preserve developer, city, state and identity URL. Generic lifecycle labels such as Existing are separated from construction phases. Official Google Blog and SRP domains are registered explicitly; lookalike domains remain blocked. Sources are prioritized by verified publisher and operator family, with instructions to prefer campus-specific material. The document setting limits readable records; attempts are separately capped at three times that setting. Structured findings use a fixed metric enum and derive their section, retaining quote and semantic checks. Proposed findings and rejection reasons remain saved internally for diagnosis. Saved reports distinguish complete, partial, no-findings and failed runs; older snapshots remain intact and can be retried explicitly. The Mesa and Quincy pipeline regression tests use synthetic fixtures, not paid live API calls.
 
 ### Simplified discovery interface
 
