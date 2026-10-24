@@ -7,14 +7,14 @@ import streamlit as st
 from dotenv import load_dotenv
 
 from .brief import cited_statement, section_findings
-from .city_location import locate_city
 from .errors import describe_error
-from .map_view import candidate_id, show_map
-from .models import Limits, Site, Snapshot, now, uid
+from .map_view import candidate_id, candidate_location, show_map
+from .models import Document, Limits, Site, Snapshot, now, uid
 from .research import Candidate, Researcher
 from .retrieval import eligible_source, host_of
 from .store import Store, changes
 from .topics import MISSING, SECTIONS
+from .tracker import TRACKER_URL, discover_tracker, discovery_key
 
 DEVELOPERS = (
     "Aligned Data Centers",
@@ -111,11 +111,15 @@ def investigate(candidate, developer, store, key, model, limits, approved):
         completed = [s for s in snapshots if s.report_version > 0]
         selected((completed or snapshots)[0].id)
         return
-    location = locate_city(candidate.city, candidate.state, candidate.address)
+    location = candidate_location(candidate)
     site = Site(
         id=site_id,
         name=candidate.name,
         developer=developer,
+        operator=candidate.tracker_operator or "Unconfirmed",
+        discovery_source="U.S. Data Centers Tracker" if candidate.tracker_id else "",
+        discovery_url=candidate.tracker_url,
+        reported_status=candidate.tracker_status,
         address=candidate.address,
         city=candidate.city,
         state=candidate.state,
@@ -123,10 +127,17 @@ def investigate(candidate, developer, store, key, model, limits, approved):
         identity_url=candidate.identity_url,
         latitude=location["latitude"] if location else None,
         longitude=location["longitude"] if location else None,
-        location_precision="Approximate city location" if location else "Unconfirmed",
-        location_source="US Census Bureau 2025 Places Gazetteer" if location else "",
+        location_precision=location["precision"] if location else "Unconfirmed",
+        location_source=location["source"] if location else "",
     )
     snapshot = Snapshot(site=site)
+    snapshot.documents = [Document(title="Tracker-linked source", url=url) for url in candidate.source_urls]
+    if candidate.tracker_id:
+        snapshot.notes.append(
+            f"Discovery: U.S. Data Centers Tracker {candidate.tracker_url}. "
+            f"Tracker-reported operator: {candidate.tracker_operator}; status: {candidate.tracker_status}. "
+            "Listing details require independent verification."
+        )
     store.save(snapshot)
     selected(snapshot.id)
     perform_research(store, snapshot, key, model, limits, approved)
@@ -149,10 +160,11 @@ def render():
         developer = st.selectbox(
             "Developer name", DEVELOPERS, index=None, key="developer-name", placeholder="Choose a developer"
         )
-        discover = st.button("Find sites", type="primary", disabled=not key or not developer)
+        discover = st.button("Find sites", type="primary", disabled=not developer)
         st.caption(
-            "Find up to 20 announced or existing US sites, then click a city pin. Discovery is a bounded search, not a complete portfolio census."
+            "Find matching operator listings in the U.S. Data Centers Tracker. Includes all tracker statuses; coverage may be incomplete."
         )
+        st.markdown(f"[Source: U.S. Data Centers Tracker]({TRACKER_URL})")
     model = os.getenv("OPENAI_MODEL", "gpt-6-astra")
     limits = Limits(search_calls=6, documents=16, file_mb=12, output_tokens=12000, seconds=480)
     # Optional administrator-maintained domains; no settings form in the user workflow.
@@ -166,24 +178,21 @@ def render():
         st.session_state.update(active_developer=developer, selected=None, last_map_selection=None)
     if discover:
         try:
-            with st.spinner("Finding developer sites and official identity sources…"):
-                candidates = Researcher(key, model, limits).discover(
-                    f"Find announced and existing US datacenter sites developed or operated by {developer}. "
-                    "Return only sites with official identity sources supporting this company relationship. Include city and state."
-                )
-                store.save_discovery(developer, [c.model_dump() for c in candidates])
+            with st.spinner("Loading U.S. Data Centers Tracker listings…"):
+                candidates = discover_tracker(developer)
+                store.save_discovery(discovery_key(developer), [c.model_dump() for c in candidates])
             if not candidates:
-                st.info(
-                    "No supported sites found within this search. Try another developer or retry Find sites."
-                )
+                st.info("No matching operator listings were returned by the tracker. Try another developer.")
         except Exception as exc:
             st.error("Discovery failed: " + describe_error(exc))
-    candidates = [Candidate.model_validate(c) for c in store.discovery(developer)] if developer else []
+    candidates = (
+        [Candidate.model_validate(c) for c in store.discovery(discovery_key(developer))] if developer else []
+    )
     st.title("Grid Atlas", anchor=False)
     st.markdown("### Understand the infrastructure behind a datacenter site.")
     st.markdown(
         "Grid Atlas is a US datacenter research workspace for developers evaluating announced and existing campuses. "
-        "Choose an operator or developer to locate its discovered sites on the map, then select a map marker or a listed site to investigate "
+        "Choose an operator or developer to find its U.S. Data Centers Tracker listings, then select a map marker or a listed site to investigate "
         "the campus. Regional grid and utility reference layers put those locations in context."
     )
     st.markdown(
@@ -195,7 +204,7 @@ def render():
     )
     if not key:
         st.warning(
-            "Set OPENAI_API_KEY in the project .env or Streamlit secrets and restart to enable discovery and new investigations."
+            "Tracker discovery works without an API key. Set OPENAI_API_KEY in the project .env or Streamlit secrets to enable detailed investigations."
         )
     st.subheader("Explore datacenter locations")
     utilities = st.checkbox("Show utility territories", value=False)
@@ -209,11 +218,16 @@ def render():
             choice = chosen[0]
     elif chosen:
         st.session_state["last_map_selection"] = None
-        st.info("Several sites share this city. Select one of the highlighted names below.")
+        st.info("Several sites share this map location. Select one of the highlighted names below.")
     else:
         st.session_state["last_map_selection"] = None
     if candidates:
         st.subheader(f"{developer} datacenter sites")
+        st.caption(
+            f"{len(candidates)} saved tracker listings. Find sites refreshes this list. "
+            "Coordinates and statuses are tracker-reported, not independently verified. "
+            "Missing coordinates use Census city points when available."
+        )
         columns = st.columns(2)
         for index, (cid, candidate) in enumerate(lookup.items()):
             with columns[index % 2]:
@@ -227,13 +241,18 @@ def render():
                     disabled=not key,
                 ):
                     choice = cid
+                if candidate.tracker_id:
+                    st.caption(
+                        f"Tracker status: {candidate.tracker_status or 'Unspecified'} · Operator: {candidate.tracker_operator}"
+                    )
+                    st.markdown(f"[Tracker record]({candidate.tracker_url})")
     if choice and key:
         investigate(lookup[choice], developer, store, key, model, limits, approved)
     current_id = st.session_state["selected"]
     snapshot = store.load(current_id) if current_id else None
     if not snapshot or snapshot.site.mode != "Live":
         st.info(
-            "Choose a developer in the sidebar and click Find sites, then select a datacenter on the map or from the list."
+            "Choose a developer in the sidebar and click Find sites to load tracker listings. Select a datacenter to investigate when an OpenAI key is configured."
         )
         return
     st.subheader(snapshot.site.name, anchor=False)

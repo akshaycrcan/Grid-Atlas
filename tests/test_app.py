@@ -6,6 +6,7 @@ from streamlit.testing.v1 import AppTest
 from pwrbnb.models import Site, Snapshot
 from pwrbnb.research import Candidate
 from pwrbnb.store import Store
+from pwrbnb.tracker import discovery_key
 
 APP = Path(__file__).resolve().parents[1] / "app.py"
 
@@ -34,7 +35,7 @@ def test_developer_discovery_persists_and_is_scoped(app, tmp_path, monkeypatch):
 
     calls = []
 
-    def discover(self, query):
+    def discover(query):
         calls.append(query)
         return [
             Candidate(
@@ -46,8 +47,8 @@ def test_developer_discovery_persists_and_is_scoped(app, tmp_path, monkeypatch):
             )
         ]
 
-    monkeypatch.setattr(ui, "secret_key", lambda: "fake-test-key")
-    monkeypatch.setattr(ui.Researcher, "discover", discover)
+    monkeypatch.setattr(ui, "secret_key", lambda: "")
+    monkeypatch.setattr(ui, "discover_tracker", discover)
     app.selectbox(key="developer-name").select("Equinix").run()
     assert not calls
     next(b for b in app.button if b.label == "Find sites").click().run()
@@ -61,9 +62,9 @@ def test_developer_discovery_persists_and_is_scoped(app, tmp_path, monkeypatch):
     reopened = AppTest.from_file(str(APP), default_timeout=30).run()
     reopened.selectbox(key="developer-name").select("Equinix").run()
     assert not reopened.exception
-    assert Store(tmp_path).discovery("Equinix")
+    assert Store(tmp_path).discovery(discovery_key("Equinix"))
     assert len(calls) == 1
-    assert Store(tmp_path).discovery("Google") == []
+    assert Store(tmp_path).discovery(discovery_key("Google")) == []
 
 
 def test_saved_live_brief_without_chat(app, tmp_path, monkeypatch):
@@ -104,11 +105,11 @@ def test_live_credit_error_shows_billing_action(app, monkeypatch):
         status_code = 429
         body = {"code": "credit_balance_exhausted", "message": "sk-secret-never-show"}
 
-    def fail_discovery(self, query):
+    def fail_discovery(query):
         raise NoCredits()
 
     monkeypatch.setattr(ui, "secret_key", lambda: "fake-test-key")
-    monkeypatch.setattr(ui.Researcher, "discover", fail_discovery)
+    monkeypatch.setattr(ui, "discover_tracker", fail_discovery)
     app.selectbox(key="developer-name").select("Equinix").run()
     next(b for b in app.button if b.label == "Find sites").click().run()
     assert not app.exception
@@ -121,7 +122,7 @@ def test_map_click_investigates_once_and_maps_city(app, tmp_path, monkeypatch):
 
     store = Store(tmp_path)
     store.save_discovery(
-        "Equinix",
+        discovery_key("Equinix"),
         [
             Candidate(
                 name="Test campus",
@@ -144,7 +145,7 @@ def test_map_click_investigates_once_and_maps_city(app, tmp_path, monkeypatch):
     app.selectbox(key="developer-name").select("Equinix").run()
     from pwrbnb.map_view import candidate_id
 
-    candidate = Candidate.model_validate(store.discovery("Equinix")[0])
+    candidate = Candidate.model_validate(store.discovery(discovery_key("Equinix"))[0])
     cid = candidate_id("Equinix", candidate)
     monkeypatch.setattr(ui, "show_map", lambda *args: ([cid], []))
     app.run()
@@ -152,7 +153,7 @@ def test_map_click_investigates_once_and_maps_city(app, tmp_path, monkeypatch):
     assert len(calls) == 1
     snapshot, approved = calls[0]
     assert snapshot.site.latitude > 38
-    assert snapshot.site.location_precision == "Approximate city location"
+    assert snapshot.site.location_precision == "City reference point"
     assert "example.com" not in approved  # Selecting a lead does not verify its publisher.
     assert not any(t.label == "Phase to investigate" for t in app.text_input)
     assert not any(b.label in {"Refresh research", "Export brief", "Export JSON"} for b in app.button)
@@ -174,7 +175,7 @@ def test_completed_map_research_reuses_saved_result(app, tmp_path, monkeypatch):
         reason="Official",
     )
     store = Store(tmp_path)
-    store.save_discovery("Equinix", [candidate.model_dump()])
+    store.save_discovery(discovery_key("Equinix"), [candidate.model_dump()])
     cid = candidate_id("Equinix", candidate)
     snap = Snapshot(site=Site(id=cid, name="Campus", developer="Equinix"), report_version=1)
     store.save(snap)
@@ -211,7 +212,7 @@ def test_site_list_selects_unmapped_site_and_hides_settings(app, tmp_path, monke
         reason="Official",
     )
     store = Store(tmp_path)
-    store.save_discovery("Microsoft", [candidate.model_dump()])
+    store.save_discovery(discovery_key("Microsoft"), [candidate.model_dump()])
     monkeypatch.setattr(ui, "secret_key", lambda: "fake")
     calls = []
     monkeypatch.setattr(ui, "perform_research", lambda *args: calls.append(args))

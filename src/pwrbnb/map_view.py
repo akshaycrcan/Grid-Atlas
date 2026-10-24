@@ -22,27 +22,47 @@ REGIONS = {
 
 
 def candidate_id(developer, candidate):
+    if candidate.tracker_id:
+        return hashlib.sha256(f"tracker:{developer}:{candidate.tracker_id}".encode()).hexdigest()[:24]
     identity = [developer, candidate.name, candidate.address, candidate.phase, candidate.identity_url]
     return hashlib.sha256(json.dumps(identity).encode()).hexdigest()[:24]
+
+
+def candidate_location(candidate):
+    if candidate.latitude is not None and candidate.longitude is not None:
+        return {
+            "latitude": candidate.latitude,
+            "longitude": candidate.longitude,
+            "label": ", ".join(x for x in (candidate.city, candidate.state) if x) or candidate.name,
+            "precision": "Tracker location; confidence: " + (candidate.location_confidence or "unspecified"),
+            "source": "U.S. Data Centers Tracker",
+        }
+    location = locate_city(candidate.city, candidate.state, candidate.address)
+    if location:
+        return dict(
+            location, precision="City reference point", source="US Census Bureau 2025 Places Gazetteer"
+        )
+    return None
 
 
 def city_markers(developer, candidates):
     groups, missing = {}, []
     for candidate in candidates:
         cid = candidate_id(developer, candidate)
-        location = locate_city(candidate.city, candidate.state, candidate.address)
+        location = candidate_location(candidate)
         if not location:
             missing.append(cid)
             continue
         label = location["label"]
         group = groups.setdefault(
-            label,
+            (location["latitude"], location["longitude"], location["precision"]),
             {
                 "name": label,
                 "lon": location["longitude"],
                 "lat": location["latitude"],
                 "candidate_ids": [],
                 "names": [],
+                "precision": location["precision"],
             },
         )
         if cid not in group["candidate_ids"]:
@@ -51,7 +71,7 @@ def city_markers(developer, candidates):
     points = list(groups.values())
     for point in points:
         point["site_names"] = " / ".join(point.pop("names"))
-        point["city_label"] = point["name"] + " · City reference point"
+        point["city_label"] = point["name"] + " · " + point["precision"]
         point["info"] = point["site_names"]
         point["properties"] = {"name": point["name"], "info": point["info"]}
     return points, missing
@@ -139,7 +159,7 @@ def show_map(developer, candidates, utilities=False):
         on_select="rerun",
         selection_mode="single-object",
         key=f"developer-map-{developer}-{catalog}",
-        alt="US datacenter cities with historical ISO/RTO and optional utility boundaries",
+        alt="US datacenter tracker locations with historical ISO/RTO and optional utility boundaries",
     )
     st.markdown(
         ":orange-badge[PJM] :blue-badge[MISO] :green-badge[SPP] :red-badge[ERCOT] "

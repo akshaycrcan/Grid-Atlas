@@ -67,6 +67,9 @@ class Site(BaseModel):
     location_precision: str = "Unconfirmed"
     location_source: str = ""
     identity_url: str = ""
+    discovery_source: str = ""
+    discovery_url: str = ""
+    reported_status: str = ""
 
     @model_validator(mode="after")
     def paired_coordinates(self):

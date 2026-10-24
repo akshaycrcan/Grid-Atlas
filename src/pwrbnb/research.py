@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal
 
 from openai import OpenAI
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from .errors import describe_error
 from .evidence import validate_claims
@@ -34,11 +34,21 @@ into a site-specific fact. Do not assume data-center load queues equal generatio
 Distinguish individual buildings, campus-wide information, regional averages and historical trials. Never describe a limited cooling deployment as campus-wide. Distinguish measured PUE/WUE from marketing targets; certification from claimed compliance;
 operational capacity from contracted or proposed capacity. Do not infer availability from proximity.
 Wikipedia is secondary background only; it cannot establish power capacity, utility commitments or permits.
+Discovery metadata, tracker-reported status and operator relationships are unverified research leads.
+Verify them from retrieved records before presenting them as findings.
 Dates must be evidenced. All announced facts must explicitly retain their attribution and announcement status.
 """
 
 
 class Candidate(BaseModel):
+    tracker_id: str = ""
+    tracker_url: str = ""
+    tracker_status: str = ""
+    tracker_operator: str = ""
+    source_urls: list[str] = Field(default_factory=list)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    location_confidence: str = ""
     city: str = ""
     state: str = ""
     name: str

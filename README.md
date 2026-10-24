@@ -2,7 +2,22 @@
 
 **[Open the live app](https://grid-atlas.streamlit.app/)**
 
-Datacenter site research powered by Streamlit and OpenAI.
+Datacenter site discovery from the U.S. Data Centers Tracker, with detailed research powered by Streamlit and OpenAI.
+
+## U.S. Data Centers Tracker integration
+
+**Find sites** queries the public [U.S. Data Centers Tracker](https://experience.arcgis.com/experience/5a4d072ad01449bba5698a80103fb909/page/Map) by operator. No OpenAI key or paid AI call is needed for discovery. Detailed investigations still require an OpenAI key.
+
+The integration uses the tracker's [Data Center Summary feature layer](https://services.arcgis.com/jDGuO8tYggdCCnUJ/arcgis/rest/services/data_centers_v4_agol_all/FeatureServer/0), identified from web map `abd7c231595e491c9d63513a195e21fc`. ArcGIS owner: `jones_ft`. The public layer and field mapping were inspected on October 24, 2026.
+
+- Operator aliases include Amazon/AWS, Meta/Facebook, Aligned, QTS, STACK and Vantage. Matching is on the operator field, not tenant or facility name; this is not a complete portfolio census.
+- All matching tracker statuses are included and labeled, including cancelled and suspended projects. Status is kept separate from construction phase and verified research findings.
+- Tracker latitude/longitude drives map pins, with the reported location confidence shown in the tooltip. Missing coordinates fall back to Census city points when matched.
+- Paginated discovery replaces the old 20-result AI search. Results persist under a separate tracker cache key; click Find sites once for each developer after upgrading. Failed or incomplete downloads preserve the previous saved list. Older investigations remain stored.
+- Tracker source links seed document retrieval. Publisher, quote and evidence checks still apply; the tracker is not automatically treated as official proof of capacity, permits or utility service.
+- Grid/utility overlays and the CARTO/OpenStreetMap basemap are unchanged. The public ArcGIS service is an external dependency and may change its schema or availability.
+
+Implementation: `src/pwrbnb/tracker.py`; regression tests: `tests/test_tracker.py`.
 
 A Streamlit application, available online and runnable locally, for investigating announced and existing US datacenter projects, covering power, cooling and water, connectivity, reliability, economics, market competition, and land/permitting/community factors. Findings use the full workspace width with direct links to supporting sources.
 
@@ -69,8 +84,8 @@ Restart the app. Environment variables or `.streamlit/secrets.toml` with `OPENAI
 
 Live workflow:
 
-1. In the left sidebar, select **Developer name** and click **Find sites**. A bounded search returns up to 20 announced/existing US sites. This is not a complete developer portfolio. Results persist locally per developer; Find sites explicitly runs a new paid discovery.
-2. Click a city pin on the US map to start an investigation. If several campuses share that city, choose a campus from the buttons below the map. Sites whose city cannot be matched remain selectable in the site list, without an invented pin.
+1. In the left sidebar, select **Developer name** and click **Find sites**. A paginated public tracker query returns matching operator listings across all statuses. Results persist locally per developer; Find sites refreshes the tracker records without paid AI discovery.
+2. Click a tracker location on the US map to start an investigation. If several campuses share that location, choose a campus from the buttons below the map. Sites without usable tracker coordinates or a Census city match remain selectable without a pin.
 3. Read all seven research sections. Every requested field is present; unsupported fields say **Details not available.** That means evidence was not retrieved and verified, not that an asset or permit does not exist.
 4. Follow the direct reference links beside each finding. Announcements and reporting remain attributed, and market/regional/company information keeps its scope. Generic cost, queue, rack-density or lead-time ranges are never inserted as campus facts.
 5. Completed seven-part investigations are reused when selecting a campus again. Ordinary reruns do not repeat paid research. An incomplete, empty, failed or older investigation has an explicit Retry investigation button. Export, refresh, history and saved-investigation controls are absent from the interface.
@@ -80,7 +95,7 @@ Recognized sources include registered official developer/operator websites, gove
 
 ### Map reference data
 
-City pins use the bundled US Census 2025 Gazetteer and represent cities, not campus parcels. ISO/RTO shading covers PJM, MISO, SPP, ERCOT, CAISO, NYISO and ISO-NE, with gray non-ISO regions. Optional utility outlines use a bundled HIFLD-derived retail territory dataset. The datasets are simplified for display and **historical**: ISO source dates are June 2020 / validation May 2021, and utility source dates vary. Confirm current boundaries with the relevant operator. Map overlays never establish service eligibility, available MW or a site's serving utility.
+Pins use tracker coordinates with reported confidence; the bundled US Census 2025 Gazetteer supplies fallback city points, not parcel locations. ISO/RTO shading covers PJM, MISO, SPP, ERCOT, CAISO, NYISO and ISO-NE, with gray non-ISO regions. Optional utility outlines use a bundled HIFLD-derived retail territory dataset. The datasets are simplified for display and **historical**: ISO source dates are June 2020 / validation May 2021, and utility source dates vary. Confirm current boundaries with the relevant operator. Map overlays never establish service eligibility, available MW or a site's serving utility.
 
 - [ISO/RTO reference layer and provenance](https://services1.arcgis.com/4yjifSiIG17X0gW4/ArcGIS/rest/services/Data_Center_Demand_by_Region/FeatureServer/2)
 - [HIFLD-derived electric retail territories](https://services3.arcgis.com/OYP7N6mAJJCyH6hd/arcgis/rest/services/Electric_Retail_Service_Territories_HIFLD/FeatureServer/0)
@@ -121,7 +136,7 @@ Official API references: [OpenAI web search](https://developers.openai.com/api/d
 ## Limits and honest boundaries
 
 - Local hosting is not offline research. Live queries and selected evidence excerpts go to OpenAI; map tiles use external services; city and boundary data are bundled locally.
-- Nationwide discovery is general official-source discovery, not a comprehensive structured integration with every utility, docket system, permit portal, or EIA form. EIA files must be selected and interpreted for their actual scope; spreadsheet-only records currently need an accessible HTML/PDF/text equivalent.
+- Site discovery uses the tracker; follow-up evidence research searches public sources. There is no comprehensive structured integration with every utility, docket system, permit portal, or EIA form. EIA files must be selected and interpreted for their actual scope; spreadsheet-only records currently need an accessible HTML/PDF/text equivalent.
 - Scanned/encrypted PDFs and unreadable pages are flagged for OCR/manual review. Automatic OCR is not included in this first version.
 - No login, CAPTCHA, paywall, or access-control bypass is attempted.
 - Some sites block automated requests, and some portals require user-supplied records.
@@ -129,7 +144,7 @@ Official API references: [OpenAI web search](https://developers.openai.com/api/d
 - Synthesis uses at most 85,000 source characters and 10,000 characters per selected page. Truncation is disclosed; original records remain available. This is not exhaustive review of large filings.
 - Search and document limits apply per operation; token limits apply per API call. The elapsed-time limit is checked between stages, with bounded request timeouts, rather than a hard process kill. Actual returned API token usage is stored with research runs. No dollar-cost estimate is invented.
 - Quote checks are deterministic; semantic support review is model-assisted and can still be wrong. Review primary records before acting on findings.
-- Live discovery and extraction are implemented, but require an API key for end-to-end validation.
+- Tracker discovery requires internet access. Detailed extraction and evidence research require an OpenAI API key.
 - Research is synchronous. A run interrupted by a tab reload may leave a retrieval checkpoint; it never automatically retries paid work on ordinary reruns.
 - The app does not infer missing agreements, provide an engineering power-flow study, or certify development feasibility. Completed saved investigations are dated evidence, not continuously updated live telemetry.
 
@@ -161,9 +176,9 @@ Search requests preserve developer, city, state and identity URL. Generic lifecy
 
 ### Simplified discovery interface
 
-Developer selection and Find sites remain in the sidebar. All discovered sites appear as selectable buttons below the map, including those without a matched city. Hovering a marker shows site names; campuses sharing a city share a marker and can be selected individually from the list. City points are reference locations, not verified parcel coordinates. Boundary vintages and source limitations above still apply.
+Developer selection and Find sites remain in the sidebar. All discovered sites appear below the map, including those without usable coordinates. Hovering a marker shows site names and location confidence; campuses sharing coordinates can be selected individually from the list. Tracker coordinates are reported locations, not independently verified parcel coordinates. Boundary vintages and source limitations above still apply.
 
-Research settings are fixed in the background: at most 6 search-tool calls, 16 readable documents, 48 retrieval attempts, 12 MB per document, 12,000 output tokens per API call and 480 seconds per operation (checked between stages). These are broader coverage defaults, not a guarantee of exhaustive discovery. Discovery remains capped at 20 sites. OPENAI_MODEL continues to come from the environment. Administrators may set GRID_ATLAS_VERIFIED_DOMAINS to comma-separated publisher domains after verifying them; the UI no longer has a domain-entry form. Ordinary interactions continue to reuse saved research.
+Research settings are fixed in the background: at most 6 search-tool calls, 16 readable documents, 48 retrieval attempts, 12 MB per document, 12,000 output tokens per API call and 480 seconds per operation (checked between stages). These limits apply to evidence research. Tracker discovery paginates separately, with a safety limit of 100 pages of 500 records; incomplete runs are not saved. OPENAI_MODEL continues to come from the environment. Administrators may set GRID_ATLAS_VERIFIED_DOMAINS to comma-separated publisher domains after verifying them; the UI no longer has a domain-entry form. Ordinary interactions continue to reuse saved research.
 
 ### Saved-evidence recovery
 
